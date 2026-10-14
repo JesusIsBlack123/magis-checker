@@ -1,6 +1,6 @@
 """
 Magis Real Estate watcher — pushes a phone notification when a new
-Eindhoven listing appears on https://magisrealestate.com/for-rent
+Eindhoven listing appears on https://magisrealestate.com/for-rent?locations[0]=Eindhoven
 
 Setup (once):
     pip install requests beautifulsoup4
@@ -30,7 +30,7 @@ CITY = "Eindhoven"
 INTERVAL_MIN = 10                      # minutes between checks
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "justs-magis-CHANGE-ME")  # GitHub secret, or edit here for local use
 BASE = "https://magisrealestate.com"
-URL = f"{BASE}/for-rent"
+URL = f"{BASE}/for-rent?locations[0]={CITY}"   # Magis' own Eindhoven filter
 STATE_FILE = Path(__file__).with_name("magis_seen.json")
 CITIES = ["Eindhoven", "Tilburg", "Amersfoort", "Rijswijk", "'s-Hertogenbosch", "Den Bosch"]
 HEADERS = {
@@ -97,16 +97,15 @@ def fetch_listings():
         path = urlparse(href).path
         # detail pages live under /for-rent/<something>
         if urlparse(href).netloc.endswith("magisrealestate.com") and re.match(r"^/for-rent/.+", path):
-            text = card_text(a)
-            if CITY.lower() in text.lower():
-                listings[href] = text[:200]
+            # page is already filtered to CITY, so every listing link counts
+            listings[href] = card_text(a)[:200]
     return total, listings
 
 
 def check(seen):
     total, listings = fetch_listings()
     new = {u: t for u, t in listings.items() if u not in seen}
-    log(f"site total available: {total} | {CITY}: {len(listings)} | new: {len(new)}")
+    log(f"{CITY} available: {total} | listing links found: {len(listings)} | new: {len(new)}")
 
     for url, text in new.items():
         notify(f"New Magis listing in {CITY}", text, click_url=url)
@@ -116,7 +115,7 @@ def check(seen):
     # Fallback: if the site shows available units but no detail links were parsed,
     # the page layout probably changed — alert once so you can check manually.
     if total and not listings and "layout-warning" not in seen:
-        notify("Magis: listings online", f"{total} residence(s) available — check the site.")
+        notify("Magis: listings online", f"{total} residence(s) available in {CITY} — check the site.")
         seen.add("layout-warning")
     if total == 0:
         seen.discard("layout-warning")
