@@ -1,0 +1,38 @@
+name: Magis watcher
+
+on:
+  schedule:
+    # every 10 min, Mon–Fri, 06:00–19:59 UTC (= 08:00–21:59 Amsterdam summer time)
+    - cron: "*/10 6-19 * * 1-5"
+  workflow_dispatch:   # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write      # needed to save magis_seen.json back to the repo
+
+concurrency:
+  group: magis
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests beautifulsoup4
+
+      - name: Check for listings
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python magis_watcher.py --once
+
+      - name: Save seen listings
+        run: |
+          git config user.name "magis-bot"
+          git config user.email "magis-bot@users.noreply.github.com"
+          git add magis_seen.json
+          git diff --cached --quiet || (git commit -m "update seen listings" && git push)
